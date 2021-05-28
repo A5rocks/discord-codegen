@@ -23,6 +23,8 @@ skippable_sections = [
     "Get Invite URL Parameters",
     # Yep, you guessed it.
     "Gateway URL Params",
+    # Guess what?
+    "Gateway URL Query String Params",
     "JSON Response",
     "JSON Params",
     "JSON/Form Params",
@@ -36,6 +38,23 @@ skippable_sections = [
     "OAuth2 URLs",
     "Bot Auth Parameters",
 ]
+
+last_section_was_better = [
+    "System Channel Flags",
+    "Guild Features",
+    "Audit Log Structure",
+    "Voice State Structure",
+    "Voice Region Structure",
+    "Allowed Mentions Structure",
+    "Welcome Screen Structure",
+    "Presence Update Event Fields",
+    "Gateway Status Update Structure",
+    "Status Types",
+    "Welcome Screen Structure",
+    "Welcome Screen Channel Structure",
+    "Webhook Execution URL",
+]
+
 
 last = None
 table = {}
@@ -86,6 +105,10 @@ def clarify_type(t, section=None):
         elif section == "channel_structure":
             if t == "type":
                 return "channel_types_enum"
+            elif t == "a thread metadata object":
+                return "thread_metadata_structure"
+            elif t == "a thread member object":
+                return "thread_member_structure"
         elif section == "message_structure":
             if t == "type":
                 return "message_types_enum"
@@ -95,6 +118,8 @@ def clarify_type(t, section=None):
                 return "message_application_structure"
             elif t == "message_reference object":
                 return "message_reference_structure"
+            elif t == "Array of message components":
+                return "array<message_component_structure>"
         elif section == "integration_structure":
             if t == "account object":
                 return "integration_account_structure"
@@ -103,7 +128,7 @@ def clarify_type(t, section=None):
                 return "array<integer>"
             elif t == "array":
                 return "array<any>"
-        elif section == "gateway_status_update_structure":
+        elif section == "gateway_presence_update_structure":
             if t == "activity object":
                 return "activity_structure"
         elif section == "presence_update_event_structure":
@@ -129,8 +154,14 @@ def clarify_type(t, section=None):
         elif section == "guild_emojis_update_event_structure":
             if t == "array":
                 return "array<emoji_structure>"
+        elif section == "guild_members_chunk_event_structure":
+            if t == "array":
+                return "array<snowflake>"
+        elif section == "emoji_structure":
+            if t == "string (can be null only in reaction emoji objects)":
+                return "string"
         else:
-            if t == "gateway_status_update_structure":
+            if t == "gateway_presence_update_structure":
                 return "presence_structure"
             return clarify_type(t)
     if t == "snowflake or array of snowflakes":
@@ -155,6 +186,12 @@ def clarify_type(t, section=None):
             type_name = "snowflake"
         elif type_name == "Unavailable_Guild_structure":
             type_name = type_name.lower()
+        elif type_name == "buttons_structure":
+            type_name = "activity_buttons_structure"
+        elif type_name == "sticker_structure":
+            type_name = "message_sticker_structure"
+        elif type_name == "thread_members_structure":
+            type_name = "thread_member_structure"
         return f"array<{type_name}>"
     elif t.startswith("embed ") and t.endswith(" object"):
         return t.replace(" ", "_").replace("object", "structure")
@@ -188,15 +225,19 @@ def clarify_type(t, section=None):
     elif t == "partial presence update structure":
         return "partial_presence_update_structure"
     elif t == "application object":
-        return "application_object_structure"
+        return "integration_account_structure"
     elif t == "team object":
         return "team_structure"
     elif t == "message reference" or t == "message reference object":
         return "message_reference_structure"
     elif t == "message object":
         return "message_structure"
+    elif t == "channel object":
+        return "channel_structure"
     elif t == "message interaction object":
         return "message_interaction_structure"
+    elif " or " in t:
+        return t.replace(" or ", " | ")
     else:
         return t
     # Yes, this is actually needed as a final catch-all
@@ -228,17 +269,17 @@ def fix_struct_name(name, cols=3):
         return "optional_audit_entry_info_structure"
     elif name == "presence_update_event_fields":
         return "presence_update_structure"
-    elif name == "gateway_status_update_structure":
+    elif name == "gateway_presence_update_structure":
         return "presence_structure"
     elif name == "team_object_structure":
         return "team_structure"
-    elif name == "team_members_object_structure":
+    if name == "team_members_object_structure":
         return "team_member_structure"
     return name
 
 
 def is_actually_enum(name):
-    return name in [
+    return snake(name) in [
         "channel_types_structure",
         "message_flags_structure",
         "visibility_types_structure",
@@ -250,32 +291,21 @@ def is_actually_enum(name):
         "allowed_mention_types",
         "allowed_mention_types_structure",
         "webhook_types_structure",
+        "default_message_notification_level_structure",
+        "explicit_content_level_structure",
+        "mfa_level_structure",
+        "premium_tier_structure",
+        "video_quality_modes_structure",
+        "explicit_content_filter_level_structure",
+        "privacy_level_structure",
     ]
 
 
 for child in root:
     if child.tag == "h3" and "Application Object" in child.text:
         last = "Application"
-    if child.tag == "h6" and child.text not in [
-        "System Channel Flags",
-        "Guild Features",
-        "Audit Log Structure",
-        "Audit Log Events",
-        "Voice State Structure",
-        "Voice Region Structure",
-        "Allowed Mentions Structure",
-        "Channel Mention Structure",
-        "Welcome Screen Structure",
-        "Presence Update Event Fields",
-        "Gateway Status Update Structure",
-        "Status Types",
-        "Welcome Screen Structure",
-        "Welcome Screen Channel Structure",
-        "Webhook Execution URL",
-    ]:
-        if last is None:
-            last = child.text
-        else:
+    if child.tag == "h6" and child.text not in last_section_was_better:
+        if last is not None:
             print(
                 "Warning: Setting last to",
                 child.text,
@@ -283,78 +313,55 @@ for child in root:
                 last,
                 file=sys.stderr,
             )
-            last = child.text
+
+        last = child.text
     elif child.tag == "table":
         if last is None:
             # If we hit a table we don't recognize, we try to traverse it to
             # figure out if we can recognize it. We do this immediately, then
             # have another `last is None` check to make sure that it actually
             # is none and not something we had to guess from heuristics.
-            client_status_keys_found = []
-            client_status_keys_expected = ["desktop?", "web?", "mobile?"]
-
-            guild_feature_keys_found = []
-            guild_feature_keys_expected = ["PARTNERED"]
-
-            status_update_keys_found = []
-            status_update_keys_expected = ["since", "status", "activities", "afk"]
-
-            status_type_keys_found = []
-            status_type_keys_expected = [
+            client_status_keys_expected = {"desktop?", "web?", "mobile?"}
+            guild_feature_keys_expected = {"PARTNERED"}
+            status_update_keys_expected = {"since", "status", "activities", "afk"}
+            status_type_keys_expected = {
                 "online",
                 "dnd",
                 "idle",
                 "invisible",
                 "offline",
-            ]
+            }
+            welcome_screen_keys_expected = {"description", "welcome_channels"}
+            welcome_channels_keys_expected = {"channel_id", "emoji_id", "emoji_name"}
+            application_keys_expected = {"verify_key"}
 
-            welcome_screen_keys_found = []
-            welcome_screen_keys_expected = ["description", "welcome_channels"]
-
-            welcome_channels_keys_found = []
-            welcome_channels_keys_expected = ["channel_id", "emoji_id", "emoji_name"]
-
-            application_keys_found = []
-            application_keys_expected = ["verify_key"]
+            keys = set()
 
             for t in child:
                 if t.tag == "tbody":
                     for tr in t:
                         for x in tr:
                             xt = x.text
-                            if xt in client_status_keys_expected:
-                                client_status_keys_found.append(xt)
-                            elif xt in guild_feature_keys_expected:
-                                guild_feature_keys_found.append(xt)
-                            elif xt in status_update_keys_expected:
-                                status_update_keys_found.append(xt)
-                            elif xt in status_type_keys_expected:
-                                status_type_keys_found.append(xt)
-                            elif xt in welcome_screen_keys_expected:
-                                welcome_screen_keys_found.append(xt)
-                            elif xt in welcome_channels_keys_expected:
-                                welcome_channels_keys_found.append(xt)
-                            elif xt in application_keys_expected:
-                                application_keys_found.append(xt)
+                            keys.add(xt)
 
-            def fits(a, b):
-                return set(a) == set(b)
+            def fits(a: set, b: set):
+                return a >= b
 
-            if fits(client_status_keys_found, client_status_keys_expected):
+            if fits(keys, client_status_keys_expected):
                 # Not an accurate name, but it's Close Enough:tm: and should
                 # get it to generate correctly for us
                 last = "Client Status Structure"
-            elif fits(guild_feature_keys_found, guild_feature_keys_expected):
+            elif fits(keys, guild_feature_keys_expected):
                 last = "Guild Features"
-            elif fits(status_update_keys_found, status_update_keys_expected):
+            elif fits(keys, status_update_keys_expected):
                 last = "Gateway Status Update Structure"
-            elif fits(status_type_keys_found, status_type_keys_expected):
+            elif fits(keys, status_type_keys_expected):
                 last = "Status Types"
-            elif fits(welcome_screen_keys_found, welcome_screen_keys_expected):
+            elif fits(keys, welcome_screen_keys_expected):
                 last = "Welcome Screen Structure"
-            elif fits(welcome_channels_keys_found, welcome_channels_keys_expected):
+            elif fits(keys, welcome_channels_keys_expected):
                 last = "Welcome Screen Channel Structure"
-            elif fits(application_keys_found, application_keys_expected):
+            elif fits(keys, application_keys_expected):
                 last = "Application"
 
         if last is None:
@@ -362,7 +369,6 @@ for child in root:
                 f"Warning: Skipping unknown table due to no last header.",
                 file=sys.stderr,
             )
-            last = None
         elif last not in skippable_sections:
             last = last.strip()
             # print("Processing section:", last, file=sys.stderr)
@@ -370,8 +376,7 @@ for child in root:
             for table_chunk in child:
                 if table_chunk.tag == "thead":
                     for header_row in table_chunk:
-                        for header_col in header_row:
-                            col_count += 1
+                        col_count += len(header_row)
                 elif table_chunk.tag == "tbody":
                     # Name | Value
                     # Field | Type | Description
@@ -396,10 +401,7 @@ for child in root:
                                     name = snake(full_text(cols[1]))
                                     value = full_text(cols[0])
                                     struct[name] = value
-                                elif (
-                                    last == "Premium Types"
-                                    or last == "Visibility Types"
-                                ):
+                                elif last == "Visibility Types":
                                     name = snake(cols[1].text).strip()
                                     value = cols[0].text.strip()
                                     desc = full_text(cols[2])
@@ -410,12 +412,15 @@ for child in root:
                                     value = cols[0].text.strip()
                                     desc = cols[1].text.strip()
                                     struct[name] = {"value": value, "desc": desc}
+                                elif last == "Embed Types":
+                                    value = name = cols[0].text.strip()
+                                    desc = cols[1].text.strip()
+                                    struct[name] = {"value": value, "desc": desc}
                                 else:
                                     name = cols[0].text.strip().replace(".", "_")
                                     value = cols[1].text.strip()
                                     struct[name] = value
                             elif col_count == 3:
-                                # print("LAST = " + last, file=sys.stderr)
                                 name = cols[0].text.strip()
                                 # Make hyperlinks inside of types work
                                 type_ = full_text(cols[1])
@@ -538,7 +543,7 @@ for child in root:
                         # NOTE: WE LITERALLY CANNOT USE fix_struct_name HERE!
                         # It breaks the Elixir codegen somehow, idk why.
                         # TODO: ??????????
-                        if section_name == "gateway_status_update_structure":
+                        if section_name == "gateway_presence_update_structure":
                             section_name = "presence_structure"
                         elif section_name == "team_object_structure":
                             section_name = "team_structure"
@@ -548,7 +553,7 @@ for child in root:
                             f"Warning: Skipping json section: {last}", file=sys.stderr
                         )
         last = None
-    else:
+    elif child.text not in last_section_was_better:
         print(f"Unknown tag: {child.tag}, last={last}", file=sys.stderr)
 
 print(json.dumps(table, indent=2))

@@ -270,8 +270,9 @@ for (key, value) in data.items():
             if isinstance(enum_value, str):
                 out_enum_value = enum_value
                 if "<<" in enum_value:
+                    enum_value = enum_value.strip(")").split("(")[0]
                     # This is evil but it solves the problem
-                    out_enum_value = str(eval(enum_value))
+                    out_enum_value = str(eval(enum_value.strip()))
                 out += f"  def {enum_name}_{snake(enum_key)}, do: {quote(out_enum_value)}\n"
             elif isinstance(enum_value, dict):
                 if "desc" in enum_value:
@@ -280,8 +281,9 @@ for (key, value) in data.items():
                     out += f'  @doc "{unquote(desc)}"\n'
                 inner_value = enum_value["value"]
                 if "<<" in inner_value:
+                    inner_value = inner_value.strip(")").split("(")[0]
                     # This is evil but it solves the problem
-                    inner_value = str(eval(inner_value))
+                    inner_value = str(eval(inner_value.strip()))
                 out += (
                     f"  def {enum_name}_{snake(enum_key)}, do: {quote(inner_value)}\n"
                 )
