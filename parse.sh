@@ -70,6 +70,49 @@ find $output_dir -maxdepth 1 -type f -print0 | while IFS= read -r -d $'\0' file;
     process_elixir "$file"
 done
 
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+echo ""
+
+python_path="$output_dir/python"
+mkdir -pv $python_path
+
+echo ">> Generating Python structs in $python_path..."
+
+function process_python() {
+    echo ">> Processing JSON -> Python: $1"
+    basename=$(basename $1 | sed -e 's/.json//g' | awk '{print tolower($0)}')
+    echo ">> Sending output to $python_path/$basename.py"
+    cat $1 | python process_python.py $basename "$git_info" > "$python_path/$basename.py"
+}
+
+echo > "$python_path/__init__.py"
+
+cat > "$python_path/base.py" << EOF
+import typing
+
+class UNKNOWN:
+    pass
+
+T = typing.TypeVar('T')
+
+Unknownish = typing.Union[typing.Type[UNKNOWN], T]
+
+Snowflake = typing.NewType('Snowflake', int)
+EOF
+
+
+find $output_dir -maxdepth 1 -type f -print0 | while IFS= read -r -d $'\0' file; do
+    process_python "$file"
+done
+
 runtime=$((($(date +%s%N) - $start)/1000000))
 
 echo ">> Done! Took ${runtime}ms"
