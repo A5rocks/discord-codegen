@@ -17,6 +17,7 @@ echo ">> Latest commit: $git_info"
 # Base paths
 docs_path="$1/docs"
 resources_path="$docs_path/resources"
+interactions_path="$docs_path/interactions"
 topics_path="$docs_path/topics"
 
 # Necessary topics
@@ -39,6 +40,10 @@ process $teams_path
 process $oauth_path
 
 find $resources_path -maxdepth 1 -type f -print0 | while IFS= read -r -d $'\0' file; do
+    process "$file"
+done
+
+find $interactions_path -maxdepth 1 -type f -print0 | while IFS= read -r -d $'\0' file; do
     process "$file"
 done
 

@@ -43,8 +43,8 @@ def fix_type(t: str) -> tuple[list[str], str]:
         # wtf
         return (["typing"], "t.Tuple[int, int]")
     # slash commands are super non-standard docs, TODO
-    elif t in ["message_interaction_structure", "message_component_structure"]:
-        return fix_type("map")
+    #elif t in ["message_interaction_structure", "message_component_structure"]:
+    #    return fix_type("map")
     elif t.endswith("_structure"):
         nt = pascal(t[:-len("_structure")])
         return ([(t, nt)], nt)
@@ -75,8 +75,10 @@ def fix_type(t: str) -> tuple[list[str], str]:
         reqs = [req for req in l_req + r_req]
 
         return (reqs + ["typing"], f"t.Union[{l_type}, {r_type}]")
-    elif "any" == t:
+    elif t == "any":
         return ([], "object")
+    elif t == "audit_log_change_key":
+        return ([], "AuditLogChangeKey")
     else:
         raise Exception(f"unhandled {t}")
 
@@ -98,7 +100,6 @@ def build_type(v: dict[str, object]) -> tuple[list[str], str]:
             imports.append("typing")
 
         if optional:
-            # wellll.... todo:
             type_ = f"Unknownish[{type_}]"
             imports.append("base")
 
@@ -172,12 +173,27 @@ def resolve_module(entry: str) -> str:
 
 for k, v in data.items():
     if k == "audit_log_change_key":
-        # complicated output. how to represent it? (TODO)
-        pass
+        if "enum" not in header:
+            # should this use an IntEnum / IntFlag?
+            header += "from enum import Enum\n"
+
+        # TODO: should this somehow be an ADT for `type` to work?
+        res = []
+        for k, v in v.items():
+            res.append(f'#: a "{v["object_changed"]}" just changed. the values are of type {v["type"]}')
+            res.append(f'#: description: {v["desc"]}')
+            res.append(f"{k.upper().strip('$')} = '{k}'")
+
+        out += "class AuditLogChangeKey(Enum):\n"
+        out += textwrap.indent("\n".join(res), " "*4) + "\n"
+
     elif is_type(k):
         if k == "identify_connection_properties_structure":
             # bad keys ($os, etc.)
             continue
+
+        if k == "audit_log_change_structure":
+            v["key"]["type"] = "audit_log_change_key"
 
         if k in circular_referenced_types:
             old_out, old_header = out, header

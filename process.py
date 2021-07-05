@@ -45,7 +45,6 @@ last_section_was_better = [
     "Audit Log Structure",
     "Voice State Structure",
     "Voice Region Structure",
-    "Allowed Mentions Structure",
     "Welcome Screen Structure",
     "Presence Update Event Fields",
     "Gateway Status Update Structure",
@@ -119,7 +118,7 @@ def clarify_type(t, section=None):
             elif t == "message_reference object":
                 return "message_reference_structure"
             elif t == "Array of message components":
-                return "array<message_component_structure>"
+                return "array<component_structure>"
         elif section == "integration_structure":
             if t == "account object":
                 return "integration_account_structure"
@@ -160,6 +159,23 @@ def clarify_type(t, section=None):
         elif section == "emoji_structure":
             if t == "string (can be null only in reaction emoji objects)":
                 return "string"
+        elif section == "interaction_structure":
+            if t == "interaction type":
+                return "interaction_request_type_enum"
+        elif section == "message_interaction_structure":
+            if t == "interaction type":
+                return "interaction_request_type_enum"
+        elif section == "application_command_interaction_data_option_structure":
+            if t == "integer":
+                return "application_command_option_type_enum"
+            elif t == "application command option type":
+                # TODO: adt
+                return "any"
+        elif section == "interaction_response_structure":
+            if t == "interaction callback type":
+                return "interaction_callback_type_enum"
+            elif t == "interaction application command callback data":
+                return "interaction_application_command_callback_data_structure"
         else:
             if t == "gateway_presence_update_structure":
                 return "presence_structure"
@@ -172,8 +188,9 @@ def clarify_type(t, section=None):
         return "user_structure"
     elif t == "guild member object" or t == "member object" or t == "member":
         return "guild_member_structure"
-    elif t.startswith("array of"):
-        cleaned = re.sub(r"objects.*$", "", t.replace("array of", "")).strip()
+    elif t.startswith("array of") or t.startswith("list of"):
+        n = "array of" if t.startswith("array of") else "list of"
+        cleaned = re.sub(r"objects.*$", "", t.replace(n, "")).strip()
         snaked = snake(cleaned)
         type_name = f"{snaked}_structure"
         if type_name == "role_object_ids_structure":
@@ -192,6 +209,16 @@ def clarify_type(t, section=None):
             type_name = "message_sticker_structure"
         elif type_name == "thread_members_structure":
             type_name = "thread_member_structure"
+        elif type_name == "partial_guild_member_structure":
+            type_name = "map"
+        elif type_name == "components_structure":
+            type_name = "component_structure"
+        elif type_name == "select_options_structure":
+            type_name = "select_option_structure"
+        elif type_name == "embeds_structure":
+            type_name = "embed_structure"
+        elif type_name == "allowed_mention_types_structure":
+            type_name = "allowed_mention_types_enum"
         return f"array<{type_name}>"
     elif t.startswith("embed ") and t.endswith(" object"):
         return t.replace(" ", "_").replace("object", "structure")
@@ -238,6 +265,24 @@ def clarify_type(t, section=None):
         return "message_interaction_structure"
     elif " or " in t:
         return t.replace(" or ", " | ")
+    elif t == "boolean (default true)":
+        return "boolean"
+    elif t == "application command permission type":
+        return "application_command_permission_type_enum"
+    elif t == "application command interaction data":
+        return "application_command_interaction_data_structure"
+    elif t == "application command interaction data resolved":
+        return "application_command_interaction_data_resolved_structure"
+    elif t in ["Map of Snowflakes to user objects", "Map of Snowflakes to partial member objects",
+                "Map of Snowflakes to role objects", "Map of Snowflakes to partial channel objects"]:
+        # TODO: should there be a map generic?
+        return "map"
+    elif t == "allowed mentions":
+        return "allowed_mentions_structure"
+    elif t == "partial emoji":
+        return "map"
+    elif t == "invite stage instance object":
+        return "invite_stage_instance_structure"
     else:
         return t
     # Yes, this is actually needed as a final catch-all
@@ -273,6 +318,8 @@ def fix_struct_name(name, cols=3):
         return "presence_structure"
     elif name == "team_object_structure":
         return "team_structure"
+    elif name == "button_styles":
+        return "button_style_enum"
     if name == "team_members_object_structure":
         return "team_member_structure"
     return name
@@ -298,6 +345,9 @@ def is_actually_enum(name):
         "video_quality_modes_structure",
         "explicit_content_filter_level_structure",
         "privacy_level_structure",
+        "component_types_structure",
+        "interaction_callback_type_structure",
+        "interaction_application_command_callback_data_flags_structure",
     ]
 
 
@@ -528,6 +578,26 @@ for child in root:
                                         "desc": description,
                                         "optional": full_text(cols[0]).endswith("?"),
                                         "nullable": not optional,
+                                    }
+                                elif last == "Component Structure":
+                                    # field | type | description | valid for
+                                    field = full_text(cols[0]).replace("?", "").strip()
+                                    type_ = full_text(cols[1])
+                                    description = f"{full_text(cols[2])} (valid for: {full_text(cols[3])})"
+                                    struct[field] = {
+                                        "type": clarify_type(type_),
+                                        "desc": description,
+                                        "optional": full_text(cols[0]).endswith("?"),
+                                        "nullable": False
+                                    }
+                                elif last == "Button Styles":
+                                    # name | value | color | required field
+                                    name = full_text(cols[0]).strip()
+                                    value = full_text(cols[1])
+                                    description = f"color: {full_text(cols[2])}, requires: `{full_text(cols[3])}`"
+                                    struct[name] = {
+                                        "value": value,
+                                        "description": description
                                     }
                                 else:
                                     print(
