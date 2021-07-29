@@ -28,6 +28,7 @@ skippable_sections = [
     "JSON Response",
     "JSON Params",
     "JSON/Form Params",
+    "Form Params",
     "Sharding Formula",
     "Widget Style Options",
     "Limits",
@@ -176,6 +177,9 @@ def clarify_type(t, section=None):
                 return "interaction_callback_type_enum"
             elif t == "interaction application command callback data":
                 return "interaction_application_command_callback_data_structure"
+        elif section == "guild_stickers_update_event_structure":
+            if t == "array":
+                return "array<sticker_structure>"
         else:
             if t == "gateway_presence_update_structure":
                 return "presence_structure"
@@ -205,8 +209,6 @@ def clarify_type(t, section=None):
             type_name = type_name.lower()
         elif type_name == "buttons_structure":
             type_name = "activity_buttons_structure"
-        elif type_name == "sticker_structure":
-            type_name = "message_sticker_structure"
         elif type_name == "thread_members_structure":
             type_name = "thread_member_structure"
         elif type_name == "partial_guild_member_structure":
@@ -219,6 +221,8 @@ def clarify_type(t, section=None):
             type_name = "embed_structure"
         elif type_name == "allowed_mention_types_structure":
             type_name = "allowed_mention_types_enum"
+        elif type_name == "message_sticker_item_structure":
+            type_name = "sticker_item_structure"
         return f"array<{type_name}>"
     elif t.startswith("embed ") and t.endswith(" object"):
         return t.replace(" ", "_").replace("object", "structure")
@@ -263,8 +267,10 @@ def clarify_type(t, section=None):
         return "channel_structure"
     elif t == "message interaction object":
         return "message_interaction_structure"
-    elif " or " in t:
+    elif " or " in t and "," not in t:
         return t.replace(" or ", " | ")
+    elif " or " in t:
+        return t.replace(" or ", "").replace(",", " | ")
     elif t == "boolean (default true)":
         return "boolean"
     elif t == "application command permission type":
@@ -348,6 +354,8 @@ def is_actually_enum(name):
         "component_types_structure",
         "interaction_callback_type_structure",
         "interaction_application_command_callback_data_flags_structure",
+        "application_command_option_type_structure",
+        "sticker_types_structure",
     ]
 
 

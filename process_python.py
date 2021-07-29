@@ -16,7 +16,7 @@ header = ""
 out = ""
 
 # types that contain a circular reference
-circular_referenced_types = [ "message_structure" ]
+circular_referenced_types = [ "message_structure", "interaction_structure" ]
 
 def pascal(k: str) -> str:
     return "".join([n.capitalize() for n in k.split("_")])
@@ -67,18 +67,24 @@ def fix_type(t: str) -> tuple[list[str], str]:
     elif t == "timestamp":
         return (["datetime"], "dt.datetime")
     elif "|" in t:
-        l, r = t.split(" | ")
-        l, r = l.strip(), r.strip()
-        l_req, l_type = fix_type(l)
-        r_req, r_type = fix_type(r)
+        things = t.split(" | ")
+        things = [thing.strip() for thing in things]
+        things = [fix_type(thing) for thing in things]
 
-        reqs = [req for req in l_req + r_req]
+        reqs = [thing[0] for thing in things]
+        requires = ["typing"]
+        for req in reqs:
+            requires.extend(req)
 
-        return (reqs + ["typing"], f"t.Union[{l_type}, {r_type}]")
+        res = (requires, f"t.Union[{', '.join(thing[1] for thing in things)}]")
+
+        return res
     elif t == "any":
         return ([], "object")
     elif t == "audit_log_change_key":
         return ([], "AuditLogChangeKey")
+    elif t == "double":
+        return ([], "float")
     else:
         raise Exception(f"unhandled {t}")
 
